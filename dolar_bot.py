@@ -1,49 +1,21 @@
 import requests, queue, threading, time, random, telebot
 from bs4 import BeautifulSoup
-import files
+import tools
 
 #bot token
 bot = telebot.TeleBot('6204169915:AAHO-Nh2HgMZk3h-NlyrNT1tLb4ioU1D44k')
 #multithreading init
 q = queue.Queue()
-#txt
+#save DIRs
 users_subs = r"./users.txt"
 frases_peronistas = r"./frases.txt"
 dolar_registrado = r"./dolar.json"
 
 
-def blue():
-    # request
-    dolar_request = requests.get('https://dolarhoy.com/')
-    # html crudo
-    soup = BeautifulSoup(dolar_request.content, 'html.parser')
-    # divs con clase tile is-child
-    divs = soup.find_all(class_='tile is-child')
-    # primer resultado, es decir, dolar blue
-    div_dolar = divs[0]
-    # busco en la div del blue la parte de venta
-    venta_soup = div_dolar.find(class_='venta')
-    # busco en la parte de venta el precio, y filtro solo texto
-    venta = venta_soup.find(class_='val').text
 
-    # repito ultimos dos pasos pero con compra
-    compra_soup = divs[0].find(class_='compra')
-    compra = compra_soup.find(class_='val').text
-
-    # quito el '$' y convierto a int
-    venta = int(venta.replace('$', ''))
-    compra = int(compra.replace('$', ''))
-
-    try:
-        files.json_borrador(dolar_registrado)
-    except:
-        pass
-    files.json_escritor(direction=dolar_registrado, dict={"venta": venta, "compra": compra})
-    return {"venta": venta, "compra": compra}
-
-
-
+# thread del bot
 def telegram_bot():
+    # init response
     @bot.message_handler(commands=['start'])
     def start(message):
         bot.reply_to(message, text=f'''
@@ -51,7 +23,7 @@ Hola soy InzaBot, usá /help para lista de comandos ✌️
 CFK 2023!
 ''')
 
-
+    # comando help
     @bot.message_handler(commands=['help'])
     def help(message):
         bot.reply_to(message, text= """
@@ -61,34 +33,43 @@ Comandos:
 /peron, peronismo, frase, fraseperoncha, fraseperonista: Frase random de Perón
 """)
 
-
+    # comando valor blue actual
     @bot.message_handler(commands=['bluenow'])
     def bluenow(message):
+        # responde al usuario con el valor actual de compra y venta
         bot.reply_to(message, text=f'''
-El dólar está {blue()['venta']} en venta y {blue()['compra']} en compra.
+El dólar está {tools.blue(dolar_registrado)['venta']} en venta y {tools.blue(dolar_registrado)['compra']} en compra.
 VIVA PERÓN ✌️
 ''')
 
+    #añadir a lista de usuarios que se avisa cuando sube el dolar
     @bot.message_handler(commands=['addme'])
     def blueadv(message):
 
-        if not message.chat.id in files.txt_lector(users_subs):
-            files.txt_escritor(users_subs, message.chat.id)
+        # si no está en la lista
+        if not str(message.chat.id) in tools.txt_lector(users_subs):
+            # lo añado
+            tools.txt_escritor(users_subs, message.chat.id)
             bot.reply_to(message, text='Añadido')
+
+        # si está en la lista, le aviso
         else:
             bot.reply_to(message, text='Ya estás añadido')
 
+    # comando ver lista de usuarios a avisar
     @bot.message_handler(commands=["advlist"])
     def advlist(message):
-        bot.reply_to(message, text= str(files.txt_lector(users_subs)))
+        bot.reply_to(message, text= str(tools.txt_lector(users_subs)))
 
+    # comando frase de peron
     @bot.message_handler(commands=["peron", "peronismo", "frase", "fraseperoncha", "fraseperonista"])
     def frase_peronista(message):
         bot.reply_to(message, f"""
-{random.choice(files.txt_lector(frases_peronistas))}
+{random.choice(tools.txt_lector(frases_peronistas))}
 - Juan Domingo Perón
 """)
 
+    # respuesta a comandos desconocidos
     @bot.message_handler(func=lambda message: True)
     def unknown_command(message):
         bot.reply_to(message, "No te entendí, usá /help para ver la lista de comandos!")
@@ -97,34 +78,50 @@ VIVA PERÓN ✌️
     bot.infinity_polling()
 
 
-
+# thread de aviso de subida del dolar
 def message_send():
-    value = int(files.json_lector(dolar_registrado)["venta"])
+    # valor de inicio referencial
+    value = int(tools.json_lector(dolar_registrado)["venta"])
+    # single use para el 505
     single_use = True
     while 1:
-        if  blue()['venta'] == 505 and single_use:
-            for user in files.txt_lector(users_subs):
+        # si el dolar esta 505 y singe use == True
+        if  tools.blue(dolar_registrado)['venta'] == 505 and single_use:
+            # aviso a todos los suscritos
+            for user in tools.txt_lector(users_subs):
                 bot.send_message(chat_id = user, text='''
 EL DOLAR LLEGÓ A 505 - ARCTIC MONKEYS
 https://www.youtube.com/watch?v=qU9mHegkTc4''')
+            # pongo single use en false para que no se repita
             single_use = False
 
-        elif blue()['venta'] >= value + 10 and files.txt_lector(users_subs):
-            value = files.json_lector(dolar_registrado)["venta"]
-            for user in files.txt_lector(users_subs):
-                bot.send_message(chat_id = user, text= f'El dolar subió a {value} VIVA PERÓN ✌️. Está {blue()["venta"]}')
+        # si el valor es mayor en 10 pesos desde la referencia
+        elif tools.blue(dolar_registrado)['venta'] >= value + 10 and tools.txt_lector(users_subs):
+            # pongo una nueva referencia
+            value = tools.json_lector(dolar_registrado)["venta"]
+            # aviso
+            for user in tools.txt_lector(users_subs):
+                bot.send_message(chat_id = user, text= f'El dolar subió a {value} VIVA PERÓN ✌️. Está {tools.blue(dolar_registrado)["venta"]}')
 
-        elif blue()['venta'] <= value - 10 and files.txt_lector(users_subs):
-            value = files.json_lector(dolar_registrado)["venta"]
-            for user in files.txt_lector(users_subs):
-                bot.send_message(chat_id = user, text= f'El dolar bajó a {value} VIVA PERÓN ✌️. Está {blue()["venta"]}')
+        # si el valor es menor en 10 pesos desde la referencia
+        elif tools.blue(dolar_registrado)['venta'] <= value - 10 and tools.txt_lector(users_subs):
+            # pongo una nueva referencia
+            value = tools.json_lector(dolar_registrado)["venta"]
+            # aviso
+            for user in tools.txt_lector(users_subs):
+                bot.send_message(chat_id = user, text= f'El dolar bajó a {value} VIVA PERÓN ✌️. Está {tools.blue(dolar_registrado)["venta"]}')
 
-
-        if not blue()['venta'] == 505:
+        # si el dolar no está 505
+        if not tools.blue(dolar_registrado)['venta'] == 505:
+            # reinicio el trigger
             single_use = True
 
+        # sleep para sobrecargar menos las revisiones
+        time.sleep(1)
 
+# defino threads
 t1 = threading.Thread(target=telegram_bot)
 t2 = threading.Thread(target=message_send)
+# inicio threads
 t1.start()
 t2.start()
