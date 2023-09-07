@@ -26,3 +26,7 @@ def dolar_blue(request):
     compra = int(compra.replace('$', ''))
 
     return JsonResponse({"venta": venta, "compra": compra})
+
+
+def bgas(request):
+    return JsonResponse({"quilmes": [1.2, 20, 30]})
